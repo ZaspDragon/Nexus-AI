@@ -1,108 +1,220 @@
+import {
+  Activity,
+  AlertTriangle,
+  Boxes,
+  Bot,
+  CheckCircle2,
+  Clock3,
+  PackageCheck,
+  Users2,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { EmptyState } from '../components/ui/EmptyState';
+import { KpiTile } from '../components/ui/KpiTile';
 import { PageHeader } from '../components/ui/PageHeader';
-import { StatCard } from '../components/ui/StatCard';
-import { useAppData } from '../hooks/useAppData';
+import { ProgressMeter } from '../components/ui/ProgressMeter';
+import { RecommendationCard } from '../components/ui/RecommendationCard';
+import { SurfaceCard } from '../components/ui/SurfaceCard';
+import { receivingLanes, warehouseOverview, commandRecommendations, workers } from '../data/warehouseDemo';
 
 export const DashboardPage = () => {
-  const { dashboardStats, agents, runs, memories, tools } = useAppData();
+  const receivingPercent = Math.round((warehouseOverview.receivingProgress.completed / warehouseOverview.receivingProgress.total) * 100);
 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Workspace"
-        title="NEXUS mission control"
-        description="Monitor your orchestration stack, recent runs, memory footprint, and model operating costs from one dashboard."
+        eyebrow={`${warehouseOverview.shift} • ${warehouseOverview.shiftWindow}`}
+        title="Warehouse command dashboard"
+        description="Nexus AI watches warehouse operations across labor, downtime, receiving, inventory, and picking so supervisors can fix bottlenecks before the shift slips."
         action={
-          <Link className="primary-button" to="/workspace">
-            Create or run an agent
+          <Link className="primary-button" to="/command-center">
+            Open AI Command Center
           </Link>
         }
       />
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <StatCard label="Total agents" value={String(dashboardStats.totalAgents)} helper="Configured across your org" />
-        <StatCard label="Tasks completed" value={String(dashboardStats.tasksCompleted)} helper="Saved mock runs" />
-        <StatCard label="Estimated monthly cost" value={`$${dashboardStats.estimatedMonthlyCost}`} helper="Based on simulated usage" />
-        <StatCard label="Saved memories" value={String(dashboardStats.savedMemories)} helper="Persistent notes available to agents" />
-        <StatCard label="Active tools" value={String(dashboardStats.activeTools)} helper="Enabled registry integrations" />
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <KpiTile
+          label="Active workers"
+          value={`${warehouseOverview.activeWorkers.current}`}
+          helper={`Target ${warehouseOverview.activeWorkers.target} this shift`}
+          trend={warehouseOverview.activeWorkers.delta}
+          tone="good"
+          icon={<Users2 className="h-5 w-5" />}
+        />
+        <KpiTile
+          label="Dock status"
+          value={`${warehouseOverview.dockStatus.activeDoors}/${warehouseOverview.dockStatus.totalDoors}`}
+          helper={warehouseOverview.dockStatus.detail}
+          trend="Dock watch"
+          tone="warn"
+          icon={<Boxes className="h-5 w-5" />}
+        />
+        <KpiTile
+          label="Receiving progress"
+          value={`${receivingPercent}%`}
+          helper={`${warehouseOverview.receivingProgress.completed}/${warehouseOverview.receivingProgress.total} loads complete`}
+          trend="18% behind target"
+          tone="bad"
+          icon={<Clock3 className="h-5 w-5" />}
+        />
+        <KpiTile
+          label="Inventory accuracy"
+          value={`${warehouseOverview.inventoryAccuracy.value}%`}
+          helper={warehouseOverview.inventoryAccuracy.detail}
+          trend="Zone B watch"
+          tone="warn"
+          icon={<PackageCheck className="h-5 w-5" />}
+        />
+        <KpiTile
+          label="Downtime alerts"
+          value={`${warehouseOverview.downtimeAlerts.open}`}
+          helper={warehouseOverview.downtimeAlerts.detail}
+          trend={warehouseOverview.downtimeAlerts.threshold}
+          tone="bad"
+          icon={<AlertTriangle className="h-5 w-5" />}
+        />
+        <KpiTile
+          label="Picks per hour"
+          value={`${warehouseOverview.picksPerHour.value}`}
+          helper={`Target ${warehouseOverview.picksPerHour.target} this shift`}
+          trend={warehouseOverview.picksPerHour.trend}
+          tone="warn"
+          icon={<Activity className="h-5 w-5" />}
+        />
+        <KpiTile
+          label="Labor utilization"
+          value={`${warehouseOverview.laborUtilization.value}%`}
+          helper={warehouseOverview.laborUtilization.detail}
+          trend={`Target ${warehouseOverview.laborUtilization.target}%`}
+          tone="warn"
+          icon={<CheckCircle2 className="h-5 w-5" />}
+        />
+        <KpiTile
+          label="AI recommendations"
+          value={`${warehouseOverview.aiRecommendations}`}
+          helper="Live actions ready for supervisors"
+          trend="2 high priority"
+          tone="good"
+          icon={<Bot className="h-5 w-5" />}
+        />
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-        <div className="rounded-3xl border border-white/10 bg-slate-950/70 p-6">
-          <div className="flex items-center justify-between">
+        <SurfaceCard
+          header={
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-semibold text-white">Shift overview</h2>
+                <p className="mt-2 text-sm text-slate-300">
+                  Fast visibility into the workstreams most likely to affect service levels this shift.
+                </p>
+              </div>
+              <Link className="ghost-button" to="/reports">
+                View reports
+              </Link>
+            </div>
+          }
+        >
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-[28px] border border-white/10 bg-white/5 p-5">
+              <ProgressMeter
+                value={receivingPercent}
+                label="Receiving target attainment"
+                detail={warehouseOverview.receivingProgress.targetMinutes}
+              />
+            </div>
+            <div className="rounded-[28px] border border-white/10 bg-white/5 p-5">
+              <ProgressMeter
+                value={warehouseOverview.inventoryAccuracy.value}
+                label="Inventory confidence"
+                detail="Higher variance risk is concentrated in Zone B today."
+              />
+            </div>
+            <div className="rounded-[28px] border border-white/10 bg-white/5 p-5">
+              <h3 className="text-sm font-medium text-white">Supervisors on duty</h3>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {warehouseOverview.supervisors.map((person) => (
+                  <span key={person} className="rounded-full border border-white/10 px-3 py-2 text-sm text-slate-200">
+                    {person}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-[28px] border border-white/10 bg-white/5 p-5">
+              <h3 className="text-sm font-medium text-white">Highest-risk lane</h3>
+              <p className="mt-4 font-display text-3xl text-white">{receivingLanes[1].lane}</p>
+              <p className="mt-2 text-sm text-slate-300">{receivingLanes[1].trailer} • ETA {receivingLanes[1].eta}</p>
+            </div>
+          </div>
+        </SurfaceCard>
+
+        <SurfaceCard
+          header={
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-semibold text-white">AI recommendations</h2>
+                <p className="mt-2 text-sm text-slate-300">Recommended actions generated from live warehouse conditions.</p>
+              </div>
+              <Link className="ghost-button" to="/command-center">
+                Open full feed
+              </Link>
+            </div>
+          }
+        >
+          <div className="space-y-4">
+            {commandRecommendations.slice(0, 2).map((item) => (
+              <RecommendationCard key={item.title} {...item} />
+            ))}
+          </div>
+        </SurfaceCard>
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <SurfaceCard
+          header={
             <div>
-              <h2 className="font-display text-2xl text-white">Active agents</h2>
-              <p className="mt-2 text-sm text-slate-300">Each agent keeps its own purpose, memory posture, tools, and preferred model.</p>
+              <h2 className="text-2xl font-semibold text-white">Crew focus</h2>
+              <p className="mt-2 text-sm text-slate-300">Critical operators and where attention should go next.</p>
             </div>
-            <Link className="ghost-button" to="/workspace">
-              Manage agents
-            </Link>
+          }
+        >
+          <div className="grid gap-3 md:grid-cols-2">
+            {workers.map((worker) => (
+              <div key={worker.name} className="rounded-[24px] border border-white/10 bg-white/5 p-4">
+                <p className="text-sm font-medium text-white">{worker.name}</p>
+                <p className="mt-1 text-xs text-slate-400">{worker.role} • {worker.zone}</p>
+                <p className="mt-3 text-sm text-slate-300">{worker.throughput}</p>
+                <p className="mt-1 text-sm text-slate-300">{worker.status}</p>
+              </div>
+            ))}
           </div>
-          <div className="mt-6 grid gap-4">
-            {agents.length ? (
-              agents.map((agent) => (
-                <article key={agent.id} className="rounded-3xl border border-white/10 bg-white/5 p-5">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div>
-                      <h3 className="font-display text-xl text-white">{agent.name}</h3>
-                      <p className="mt-2 text-sm text-slate-300">{agent.purpose}</p>
-                    </div>
-                    <div className="text-sm text-slate-300">
-                      <p>Model: {agent.preferredModel}</p>
-                      <p className="mt-1">Memory: {agent.memorySetting}</p>
-                    </div>
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {agent.tools.map((toolId) => {
-                      const tool = tools.find((item) => item.id === toolId);
-                      return (
-                        <span key={toolId} className="rounded-full border border-white/10 px-3 py-1 text-xs text-slate-200">
-                          {tool?.name ?? toolId}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </article>
-              ))
-            ) : (
-              <EmptyState title="No agents yet" description="Create your first AI agent in the workspace to populate orchestration metrics." />
-            )}
-          </div>
-        </div>
+        </SurfaceCard>
 
-        <div className="space-y-6">
-          <div className="rounded-3xl border border-white/10 bg-slate-950/70 p-6">
-            <h2 className="font-display text-2xl text-white">Recent orchestration runs</h2>
-            <div className="mt-5 space-y-4">
-              {runs.length ? (
-                runs.slice(0, 4).map((run) => (
-                  <div key={run.id} className="rounded-3xl border border-white/10 bg-white/5 p-4">
-                    <p className="text-xs uppercase tracking-[0.24em] text-cyan-300/75">{run.taskType}</p>
-                    <p className="mt-2 text-sm text-white">{run.task}</p>
-                    <p className="mt-3 text-xs text-slate-400">
-                      {run.modelsUsed.join(' + ')} • {run.subtasks.length} subtasks • ${run.estimatedCost}
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <EmptyState title="No runs yet" description="Run a task from the Agent Workspace to see orchestration history here." />
-              )}
+        <SurfaceCard
+          header={
+            <div>
+              <h2 className="text-2xl font-semibold text-white">Dock board</h2>
+              <p className="mt-2 text-sm text-slate-300">Live view of receiving activity by door.</p>
             </div>
-          </div>
-
-          <div className="rounded-3xl border border-white/10 bg-slate-950/70 p-6">
-            <h2 className="font-display text-2xl text-white">Memory pulse</h2>
-            <div className="mt-5 space-y-4">
-              {memories.slice(0, 3).map((memory) => (
-                <div key={memory.id} className="rounded-3xl border border-white/10 bg-white/5 p-4">
-                  <p className="text-sm text-white">{memory.title}</p>
-                  <p className="mt-2 text-sm text-slate-300">{memory.content}</p>
+          }
+        >
+          <div className="space-y-3">
+            {receivingLanes.map((lane) => (
+              <div key={lane.lane} className="rounded-[24px] border border-white/10 bg-white/5 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-white">{lane.lane}</p>
+                    <p className="text-xs text-slate-400">{lane.trailer}</p>
+                  </div>
+                  <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-slate-200">{lane.status}</span>
                 </div>
-              ))}
-            </div>
+                <div className="mt-4">
+                  <ProgressMeter value={lane.progress} label="Completion" detail={`Owner: ${lane.owner} • ETA ${lane.eta}`} />
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
+        </SurfaceCard>
       </section>
     </div>
   );

@@ -1,6 +1,6 @@
 # NEXUS AI MVP
 
-NEXUS AI is a production-style MVP for an agentic orchestration platform built with React, Vite, Tailwind CSS, Firebase Auth, and Firestore-ready persistence. The app ships with a full demo mode so the experience works without paid model keys or a live Firebase project.
+NEXUS AI is a production-style MVP for an agentic orchestration platform built with React, Vite, Tailwind CSS, Supabase Auth, and Firestore-ready persistence. The app ships with a full demo mode so the experience works without paid model keys or a live auth/data project.
 
 ## What is included
 
@@ -20,7 +20,7 @@ NEXUS AI is a production-style MVP for an agentic orchestration platform built w
 
 - React + Vite
 - Tailwind CSS
-- Firebase Auth
+- Supabase Auth
 - Firestore
 - Firebase Hosting-ready configuration
 - Vitest for core logic checks
@@ -69,7 +69,7 @@ firestore.rules
    npm run build
    ```
 
-## Firebase configuration
+## Environment configuration
 
 Create a local `.env` or `.env.local` file based on `.env.example`:
 
@@ -77,7 +77,14 @@ Create a local `.env` or `.env.local` file based on `.env.example`:
 cp .env.example .env.local
 ```
 
-Then add your Firebase web app values:
+Then add your Supabase Auth values:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+The app uses `window.location.origin` for auth email redirects, so make sure your deployed Vercel domain is allowed in Supabase Auth redirect URLs.
+
+If you also want Firestore persistence instead of demo-local persistence, add your Firebase web app values:
 
 - `VITE_FIREBASE_API_KEY`
 - `VITE_FIREBASE_AUTH_DOMAIN`
@@ -86,7 +93,7 @@ Then add your Firebase web app values:
 - `VITE_FIREBASE_MESSAGING_SENDER_ID`
 - `VITE_FIREBASE_APP_ID`
 
-If these values are omitted, the app automatically uses demo mode with local seeded data.
+If the Supabase env vars are omitted, the app automatically uses demo mode with local seeded data instead of crashing. If the Firebase env vars are omitted, auth can still work through Supabase while workspace data stays on demo-local persistence.
 
 ## Firestore collections
 
@@ -118,7 +125,7 @@ The current orchestration engine is intentionally mock-only. To wire real provid
 1. Keep the frontend form and orchestration timeline as-is.
 2. Replace the deterministic logic in `src/services/mockOrchestrator.ts` with backend API calls.
 3. Send requests through Firebase Functions, Cloud Run, or another backend layer.
-4. Store provider secrets in backend-only config, never in the frontend.
+4. Store provider secrets in backend-only config or environment variables, never in the frontend source.
 
 ## Firebase deploy instructions
 
@@ -155,5 +162,6 @@ The current orchestration engine is intentionally mock-only. To wire real provid
 ## Notes
 
 - API keys are never stored in frontend source or persisted from the Admin page.
+- Supabase anon keys are read from `VITE_SUPABASE_*` environment variables only and are never hardcoded in app source.
 - `firebase.json` rewrites all routes to `index.html`, so React Router works on Firebase Hosting.
 - The UI is built to remain usable on mobile with a collapsible sidebar and stacked content sections.

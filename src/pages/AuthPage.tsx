@@ -4,7 +4,7 @@ import { Badge } from '../components/ui/Badge';
 import { useAuth } from '../hooks/useAuth';
 
 export const AuthPage = () => {
-  const { currentUser, login, signup, continueDemo, mode, setMode, isFirebaseReady } = useAuth();
+  const { currentUser, login, signup, continueDemo, mode, setMode, isSupabaseReady } = useAuth();
   const navigate = useNavigate();
   const [isSignup, setIsSignup] = useState(false);
   const [name, setName] = useState('Avery');
@@ -23,7 +23,11 @@ export const AuthPage = () => {
       setSubmitting(true);
       setStatus(null);
       if (isSignup) {
-        await signup(name, email, password);
+        const result = await signup(name, email, password);
+        if (result.status === 'check-email') {
+          setStatus(`Check ${email} to confirm your account. The auth redirect returns to ${window.location.origin}.`);
+          return;
+        }
       } else {
         await login(email, password);
       }
@@ -42,7 +46,7 @@ export const AuthPage = () => {
           <p className="text-xs uppercase tracking-[0.35em] text-cyan-300/75">Access layer</p>
           <h1 className="mt-4 font-display text-5xl text-white">Sign in to the NEXUS control plane</h1>
           <p className="mt-4 text-base text-slate-300">
-            Use demo mode for zero-key exploration, or switch to Firebase auth once your project config is ready.
+            Use demo mode for zero-key exploration, or switch to Supabase Auth once your project config is ready.
           </p>
 
           <div className="mt-8 grid gap-4">
@@ -61,18 +65,18 @@ export const AuthPage = () => {
                 <button
                   type="button"
                   className={`rounded-full px-4 py-2 text-sm ${
-                    mode === 'firebase' ? 'bg-fuchsia-300 text-slate-950' : 'border border-white/10 text-white'
-                  } ${!isFirebaseReady ? 'cursor-not-allowed opacity-60' : ''}`}
-                  disabled={!isFirebaseReady}
-                  onClick={() => setMode('firebase')}
+                    mode === 'supabase' ? 'bg-fuchsia-300 text-slate-950' : 'border border-white/10 text-white'
+                  } ${!isSupabaseReady ? 'cursor-not-allowed opacity-60' : ''}`}
+                  disabled={!isSupabaseReady}
+                  onClick={() => setMode('supabase')}
                 >
-                  Firebase
+                  Supabase
                 </button>
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Badge tone={isFirebaseReady ? 'success' : 'warning'}>
-                {isFirebaseReady ? 'Firebase config detected' : 'Firebase placeholders only'}
+              <Badge tone={isSupabaseReady ? 'success' : 'warning'}>
+                {isSupabaseReady ? 'Supabase auth detected' : 'Supabase env vars missing'}
               </Badge>
               <Badge tone="accent">Hosting-ready MVP</Badge>
             </div>
@@ -136,7 +140,7 @@ export const AuthPage = () => {
           </button>
 
           <p className="mt-4 text-sm text-slate-400">
-            API keys are intentionally not accepted here. Live model credentials should be stored in a backend secret manager or Firebase Functions config.
+            Auth keys are loaded from environment variables only. Keep provider secrets in Vercel project settings instead of hardcoding them in the client.
           </p>
           {status ? <p className="mt-4 text-sm text-fuchsia-200">{status}</p> : null}
         </section>

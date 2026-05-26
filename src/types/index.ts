@@ -1,4 +1,4 @@
-export type AppMode = 'demo' | 'firebase';
+export type AppMode = 'demo' | 'supabase';
 
 export type MemorySetting = 'none' | 'shared' | 'private' | 'hybrid';
 

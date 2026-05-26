@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { PageHeader } from '../components/ui/PageHeader';
+import { SurfaceCard } from '../components/ui/SurfaceCard';
 import { useAppData } from '../hooks/useAppData';
 import type { SubscriptionTier } from '../types';
 
@@ -30,29 +31,29 @@ export const AdminSettingsPage = () => {
           .map((member) => member.trim())
           .filter(Boolean),
       });
-      setStatus('Organization settings saved.');
+      setStatus('Settings saved for this demo warehouse.');
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Unable to save organization');
+      setStatus(error instanceof Error ? error.message : 'Unable to save settings');
     }
   };
 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Org Controls"
-        title="Admin settings"
-        description="Manage company metadata, subscription posture, and live-model placeholders without ever storing provider secrets in the browser."
+        eyebrow="Settings"
+        title="Operational settings"
+        description="Manage company details, subscription posture, and environment placeholders without exposing provider secrets in the browser."
       />
 
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <section className="rounded-3xl border border-white/10 bg-slate-950/70 p-6">
+        <SurfaceCard>
           <div className="grid gap-4">
             <label className="form-field">
               <span>Company name</span>
               <input value={name} onChange={(event) => setName(event.target.value)} />
             </label>
             <label className="form-field">
-              <span>Team members placeholder</span>
+              <span>Team members</span>
               <textarea rows={5} value={teamMembers} onChange={(event) => setTeamMembers(event.target.value)} />
             </label>
             <div className="grid gap-4 md:grid-cols-2">
@@ -75,12 +76,12 @@ export const AdminSettingsPage = () => {
             </button>
             {status ? <p className="text-sm text-cyan-200">{status}</p> : null}
           </div>
-        </section>
+        </SurfaceCard>
 
-        <section className="rounded-3xl border border-white/10 bg-slate-950/70 p-6">
-          <h2 className="font-display text-2xl text-white">API key placeholders</h2>
+        <SurfaceCard>
+          <h2 className="font-display text-2xl text-white">Environment placeholders</h2>
           <p className="mt-2 text-sm text-slate-300">
-            These fields are intentionally non-secret placeholders. Wire real provider credentials through Firebase Functions, Cloud Run, or another backend secret manager.
+            These fields stay non-secret in the app. Wire live credentials through Vercel environment variables, Supabase project settings, Cloud Run, or another backend secret manager.
           </p>
           <div className="mt-6 space-y-4">
             {organization.apiKeyPlaceholders.map((placeholder) => (
@@ -96,14 +97,14 @@ export const AdminSettingsPage = () => {
                 </div>
                 <input
                   className="mt-4 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm text-slate-400"
-                  value="••••••••••••••••"
+                  value="****************"
                   disabled
                   readOnly
                 />
               </div>
             ))}
           </div>
-        </section>
+        </SurfaceCard>
       </div>
     </div>
   );

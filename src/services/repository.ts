@@ -9,7 +9,7 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import { buildDemoDataset } from '../data/demoData';
-import { db } from './firebase';
+import { db, isFirebaseConfigured } from './firebase';
 import type {
   Agent,
   AgentRun,
@@ -34,6 +34,7 @@ const COLLECTIONS = {
 } as const;
 
 const demoStorageKey = (uid: string) => `nexus-ai-demo-v1:${uid}`;
+const shouldUseDemoPersistence = (mode: AppMode) => mode === 'demo' || !isFirebaseConfigured;
 
 const readDemoDataset = (profile: UserProfile): DemoDataset => {
   const stored = localStorage.getItem(demoStorageKey(profile.uid));
@@ -126,7 +127,7 @@ const loadFirestoreCollection = async <T extends { organizationId: string }>(
 };
 
 export const bootstrapWorkspace = async (profile: UserProfile, mode: AppMode) => {
-  if (mode === 'demo') {
+  if (shouldUseDemoPersistence(mode)) {
     readDemoDataset(profile);
     return;
   }
@@ -138,7 +139,7 @@ export const loadWorkspace = async (
   profile: UserProfile,
   mode: AppMode,
 ): Promise<WorkspaceSnapshot> => {
-  if (mode === 'demo') {
+  if (shouldUseDemoPersistence(mode)) {
     return toSnapshot(readDemoDataset(profile));
   }
 
@@ -168,7 +169,9 @@ export const saveAgent = async (
   agent: Omit<Agent, 'id' | 'organizationId' | 'ownerId' | 'createdAt' | 'updatedAt'> & { id?: string },
 ): Promise<Agent> => {
   const existingDemoAgent =
-    mode === 'demo' ? readDemoDataset(profile).agents.find((item) => item.id === agent.id) : null;
+    shouldUseDemoPersistence(mode)
+      ? readDemoDataset(profile).agents.find((item) => item.id === agent.id)
+      : null;
   const savedAgent: Agent = {
     ...agent,
     id: agent.id ?? createId('agent'),
@@ -178,7 +181,7 @@ export const saveAgent = async (
     updatedAt: Date.now(),
   };
 
-  if (mode === 'demo') {
+  if (shouldUseDemoPersistence(mode)) {
     const dataset = readDemoDataset(profile);
     dataset.agents = upsertById(dataset.agents, savedAgent);
     writeDemoDataset(profile, dataset);
@@ -202,7 +205,9 @@ export const saveMemory = async (
   memory: Omit<MemoryNote, 'id' | 'organizationId' | 'ownerId' | 'createdAt' | 'updatedAt'> & { id?: string },
 ): Promise<MemoryNote> => {
   const existingDemoMemory =
-    mode === 'demo' ? readDemoDataset(profile).memories.find((item) => item.id === memory.id) : null;
+    shouldUseDemoPersistence(mode)
+      ? readDemoDataset(profile).memories.find((item) => item.id === memory.id)
+      : null;
   const savedMemory: MemoryNote = {
     ...memory,
     id: memory.id ?? createId('memory'),
@@ -212,7 +217,7 @@ export const saveMemory = async (
     updatedAt: Date.now(),
   };
 
-  if (mode === 'demo') {
+  if (shouldUseDemoPersistence(mode)) {
     const dataset = readDemoDataset(profile);
     dataset.memories = upsertById(dataset.memories, savedMemory);
     writeDemoDataset(profile, dataset);
@@ -235,7 +240,7 @@ export const saveTool = async (
   mode: AppMode,
   tool: ToolDefinition,
 ): Promise<ToolDefinition> => {
-  if (mode === 'demo') {
+  if (shouldUseDemoPersistence(mode)) {
     const dataset = readDemoDataset(profile);
     dataset.tools = upsertById(dataset.tools, tool);
     writeDemoDataset(profile, dataset);
@@ -257,7 +262,7 @@ export const saveOrganization = async (
     updatedAt: Date.now(),
   };
 
-  if (mode === 'demo') {
+  if (shouldUseDemoPersistence(mode)) {
     const dataset = readDemoDataset(profile);
     dataset.organization = savedOrganization;
     writeDemoDataset(profile, dataset);
@@ -284,7 +289,7 @@ export const saveRun = async (
     createdAt: Date.now(),
   };
 
-  if (mode === 'demo') {
+  if (shouldUseDemoPersistence(mode)) {
     const dataset = readDemoDataset(profile);
     dataset.runs = [savedRun, ...dataset.runs];
     writeDemoDataset(profile, dataset);
@@ -309,7 +314,7 @@ export const saveUsageLog = async (
     createdAt: Date.now(),
   };
 
-  if (mode === 'demo') {
+  if (shouldUseDemoPersistence(mode)) {
     const dataset = readDemoDataset(profile);
     dataset.usageLogs = [savedLog, ...dataset.usageLogs];
     writeDemoDataset(profile, dataset);
