@@ -155,3 +155,184 @@ export interface MockRunResult {
   estimatedCost: number;
   finalOutput: string;
 }
+
+export type WarehouseFacilityId = 'columbus-dc' | 'dallas-hub' | 'atlanta-dc';
+
+export type WarehouseShift = 'Day Shift' | 'Swing Shift' | 'Night Shift';
+
+export type OperationalTone = 'healthy' | 'watch' | 'urgent';
+
+export type CommandPriority = 'Critical' | 'High' | 'Medium' | 'Low';
+
+export type CommandStatus = 'New' | 'Accepted' | 'Ignored' | 'Escalated';
+
+export interface WarehouseSelectorOption {
+  id: WarehouseFacilityId;
+  label: string;
+  region: string;
+}
+
+export interface WarehouseWorker {
+  name: string;
+  role: string;
+  zone: string;
+  status: string;
+  throughput: string;
+  utilization: string;
+  note: string;
+}
+
+export interface WarehouseRecommendation {
+  id: string;
+  title: string;
+  timestamp: string;
+  department: string;
+  priority: CommandPriority;
+  confidence: number;
+  recommendation: string;
+  impact: string;
+  status: CommandStatus;
+}
+
+export interface ShiftHealthFactor {
+  label: string;
+  score: number;
+  status: 'Healthy' | 'Watch' | 'Urgent';
+  detail: string;
+}
+
+export interface ShiftHealthScore {
+  score: number;
+  summary: string;
+  factors: ShiftHealthFactor[];
+}
+
+export interface WarehouseMapZone {
+  id: string;
+  label: string;
+  detail: string;
+  tone: OperationalTone;
+  span: string;
+  type: 'dock' | 'receiving' | 'picking' | 'inventory' | 'congestion';
+  activeAlert?: string;
+}
+
+export interface TimelineEvent {
+  id: string;
+  time: string;
+  department: string;
+  severity: CommandPriority;
+  description: string;
+}
+
+export interface PredictiveInsight {
+  id: string;
+  title: string;
+  value: string;
+  tone: OperationalTone;
+  detail: string;
+  outlook: string;
+}
+
+export interface ComparisonMetric {
+  id: string;
+  label: string;
+  delta: string;
+  direction: 'up' | 'down';
+  detail: string;
+}
+
+export interface ChartSeries {
+  labels: string[];
+  values: number[];
+  target?: number;
+  suffix?: string;
+}
+
+export interface WarehouseReportCard {
+  id: string;
+  title: string;
+  description: string;
+  metrics: string[];
+  chart: ChartSeries;
+}
+
+export interface ChatPreset {
+  prompt: string;
+  response: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  message: string;
+}
+
+export interface WarehouseReceivingLane {
+  lane: string;
+  trailer: string;
+  progress: number;
+  eta: string;
+  owner: string;
+  status: string;
+}
+
+export interface WarehouseInventoryZone {
+  zone: string;
+  accuracy: number;
+  issue: string;
+  action: string;
+}
+
+export interface WarehouseLaborSegment {
+  team: string;
+  staffed: number;
+  planned: number;
+  utilization: number;
+  note: string;
+}
+
+export interface WarehouseDowntimeEvent {
+  area: string;
+  duration: number;
+  cause: string;
+  owner: string;
+  state: 'Open' | 'Monitoring' | 'Closed';
+}
+
+export interface WarehouseOverview {
+  siteName: string;
+  shift: WarehouseShift;
+  shiftWindow: string;
+  supervisors: string[];
+  activeWorkers: { current: number; target: number; delta: string };
+  dockStatus: { activeDoors: number; totalDoors: number; detail: string };
+  receivingProgress: { completed: number; total: number; targetMinutes: string };
+  inventoryAccuracy: { value: number; detail: string };
+  downtimeAlerts: { open: number; threshold: string; detail: string };
+  picksPerHour: { value: number; target: number; trend: string };
+  laborUtilization: { value: number; target: number; detail: string };
+  aiRecommendations: number;
+}
+
+export interface WarehouseFacilityData {
+  id: WarehouseFacilityId;
+  label: string;
+  region: string;
+  overview: WarehouseOverview;
+  heroSnapshot: string[];
+  shiftHealth: ShiftHealthScore;
+  commandFeed: WarehouseRecommendation[];
+  receivingLanes: WarehouseReceivingLane[];
+  inventoryZones: WarehouseInventoryZone[];
+  laborSegments: WarehouseLaborSegment[];
+  downtimeEvents: WarehouseDowntimeEvent[];
+  workers: WarehouseWorker[];
+  warehouseMap: WarehouseMapZone[];
+  timeline: TimelineEvent[];
+  predictiveInsights: PredictiveInsight[];
+  comparisonMetrics: ComparisonMetric[];
+  reportCards: WarehouseReportCard[];
+  reportHighlights: string[];
+  chatPresets: ChatPreset[];
+}

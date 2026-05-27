@@ -19,6 +19,7 @@
     background:
       radial-gradient(circle at top left, rgba(56, 189, 248, 0.12), transparent 28%),
       radial-gradient(circle at top right, rgba(37, 99, 235, 0.14), transparent 24%),
+      radial-gradient(circle at 50% 20%, rgba(59, 130, 246, 0.08), transparent 22%),
       linear-gradient(180deg, #061223 0%, #08101d 50%, #030712 100%);
     color: #e2e8f0;
     font-family: 'Space Grotesk', sans-serif;
@@ -54,6 +55,11 @@
       color 180ms ease;
   }
 
+  select option {
+    background: #08101d;
+    color: #e2e8f0;
+  }
+
   body::-webkit-scrollbar {
     width: 12px;
   }
@@ -81,7 +87,7 @@
 
   .shadow-panel {
     box-shadow:
-      0 20px 60px rgba(2, 6, 23, 0.45),
+      0 24px 70px rgba(2, 6, 23, 0.48),
       inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
 
@@ -105,5 +111,24 @@
   .form-field textarea,
   .form-field select {
     @apply rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-cyan-400/40 focus:ring-2 focus:ring-cyan-400/15;
+  }
+}
+
+@keyframes alertPulse {
+  0%,
+  100% {
+    transform: scale(0.95);
+    opacity: 0.75;
+  }
+
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+}
+
+@layer utilities {
+  .animate-alert-pulse {
+    animation: alertPulse 1.8s ease-in-out infinite;
   }
 }

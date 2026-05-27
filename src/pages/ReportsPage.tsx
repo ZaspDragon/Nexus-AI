@@ -1,46 +1,79 @@
 import { Download } from 'lucide-react';
+import { useState } from 'react';
+import { ComparisonCard } from '../components/ui/ComparisonCard';
 import { PageHeader } from '../components/ui/PageHeader';
 import { ReportCard } from '../components/ui/ReportCard';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
-import { reportCards, reportHighlights } from '../data/warehouseDemo';
+import { useAppData } from '../hooks/useAppData';
 
-export const ReportsPage = () => (
-  <div className="space-y-6">
-    <PageHeader
-      eyebrow="Reports"
-      title="Export-ready warehouse reporting"
-      description="Daily summaries, receiving performance, downtime, inventory accuracy, and AI action logs that managers can review, share, or use in customer meetings."
-      action={
-        <button type="button" className="ghost-button">
-          <Download className="h-4 w-4" />
-          Export pack coming soon
-        </button>
-      }
-    />
+export const ReportsPage = () => {
+  const { selectedWarehouse } = useAppData();
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
 
-    <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-      <div className="grid gap-4 md:grid-cols-2">
-        {reportCards.map((card) => (
-          <ReportCard key={card.title} {...card} />
-        ))}
-      </div>
-
-      <SurfaceCard
-        header={
-          <div>
-            <h2 className="text-xl font-semibold text-white">Included shift targets</h2>
-            <p className="mt-1 text-sm text-slate-400">Every report references the same operational baseline.</p>
-          </div>
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Reports"
+        title="Export-ready warehouse reporting"
+        description="Daily shift summaries, downtime detail, receiving performance, inventory accuracy, labor productivity, and AI action history in a format supervisors can actually use."
+        action={
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => setExportMessage('Report export is queued for a future backend release. This MVP keeps the pack presentation-ready in-app.')}
+          >
+            <Download className="h-4 w-4" />
+            Export pack
+          </button>
         }
-      >
-        <div className="space-y-3">
-          {reportHighlights.map((highlight) => (
-            <div key={highlight} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
-              {highlight}
-            </div>
-          ))}
+      />
+
+      {exportMessage ? (
+        <div className="rounded-[24px] border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100">
+          {exportMessage}
         </div>
-      </SurfaceCard>
-    </section>
-  </div>
-);
+      ) : null}
+
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {selectedWarehouse.reportCards.map((card) => (
+          <ReportCard key={card.id} {...card} />
+        ))}
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+        <SurfaceCard
+          header={
+            <div>
+              <p className="text-xs uppercase tracking-[0.3em] text-cyan-300/80">Included Shift Standards</p>
+              <h2 className="mt-3 text-2xl font-semibold text-white">Operational baseline</h2>
+              <p className="mt-2 text-sm text-slate-300">Every report references the same target thresholds and service levels.</p>
+            </div>
+          }
+        >
+          <div className="space-y-3">
+            {selectedWarehouse.reportHighlights.map((highlight) => (
+              <div key={highlight} className="rounded-[22px] border border-white/10 bg-white/5 px-4 py-4 text-sm text-slate-200">
+                {highlight}
+              </div>
+            ))}
+          </div>
+        </SurfaceCard>
+
+        <SurfaceCard
+          header={
+            <div>
+              <p className="text-xs uppercase tracking-[0.3em] text-cyan-300/80">Yesterday Comparison</p>
+              <h2 className="mt-3 text-2xl font-semibold text-white">What changed since yesterday?</h2>
+            </div>
+          }
+        >
+          <div className="grid gap-3 md:grid-cols-2">
+            {selectedWarehouse.comparisonMetrics.map((item) => (
+              <ComparisonCard key={item.id} item={item} />
+            ))}
+          </div>
+        </SurfaceCard>
+      </section>
+    </div>
+  );
+};

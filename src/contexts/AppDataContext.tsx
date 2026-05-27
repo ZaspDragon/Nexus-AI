@@ -1,6 +1,14 @@
-import { createContext, useEffect, useState, type PropsWithChildren } from 'react';
+import { createContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 import { calculateDashboardStats } from '../services/analytics';
 import { runMockOrchestration } from '../services/mockOrchestrator';
+import {
+  defaultWarehouseFacility,
+  defaultWarehouseFacilityId,
+  getWarehouseFacility,
+  warehouseFacilities,
+  warehouseFacilityOptions,
+  warehouseShiftOptions,
+} from '../data/warehouseDemo';
 import {
   bootstrapWorkspace,
   loadWorkspace,
@@ -14,9 +22,16 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import type {
   Agent,
+  ChatMessage,
+  CommandStatus,
   MemoryNote,
   Organization,
+  TimelineEvent,
   ToolDefinition,
+  WarehouseFacilityData,
+  WarehouseFacilityId,
+  WarehouseRecommendation,
+  WarehouseShift,
   WorkspaceSnapshot,
 } from '../types';
 
@@ -34,6 +49,20 @@ interface AppDataContextValue extends WorkspaceSnapshot {
   updateOrganization: (organization: Organization) => Promise<Organization>;
   runTask: (agentId: string, task: string) => Promise<void>;
   dashboardStats: ReturnType<typeof calculateDashboardStats>;
+  facilityOptions: typeof warehouseFacilityOptions;
+  shiftOptions: WarehouseShift[];
+  selectedFacilityId: WarehouseFacilityId;
+  setSelectedFacilityId: (facilityId: WarehouseFacilityId) => void;
+  selectedShift: WarehouseShift;
+  setSelectedShift: (shift: WarehouseShift) => void;
+  selectedWarehouse: WarehouseFacilityData;
+  commandFeed: WarehouseRecommendation[];
+  timeline: TimelineEvent[];
+  chatMessages: ChatMessage[];
+  chatLoading: boolean;
+  updateRecommendationStatus: (recommendationId: string, status: CommandStatus) => void;
+  createTaskFromRecommendation: (recommendationId: string) => string | null;
+  askNexus: (prompt: string) => Promise<void>;
 }
 
 const emptySnapshot: WorkspaceSnapshot = {
@@ -54,6 +83,30 @@ const emptySnapshot: WorkspaceSnapshot = {
   usageLogs: [],
 };
 
+const cloneFacilityFeed = () =>
+  Object.fromEntries(
+    Object.entries(warehouseFacilities).map(([facilityId, facility]) => [
+      facilityId,
+      facility.commandFeed.map((item) => ({ ...item })),
+    ]),
+  ) as Record<WarehouseFacilityId, WarehouseRecommendation[]>;
+
+const cloneFacilityTimeline = () =>
+  Object.fromEntries(
+    Object.keys(warehouseFacilities).map((facilityId) => [facilityId, []]),
+  ) as unknown as Record<WarehouseFacilityId, TimelineEvent[]>;
+
+const buildIntroMessage = (facility: WarehouseFacilityData): ChatMessage => ({
+  id: `intro-${facility.id}`,
+  role: 'assistant',
+  message: `Ask Nexus AI about ${facility.label}. I can explain receiving risk, labor moves, inventory confidence, dock-to-stock pressure, and the biggest shift threats.`,
+});
+
+const buildFacilityChats = () =>
+  Object.fromEntries(
+    Object.values(warehouseFacilities).map((facility) => [facility.id, [buildIntroMessage(facility)]]),
+  ) as Record<WarehouseFacilityId, ChatMessage[]>;
+
 export const AppDataContext = createContext<AppDataContextValue | null>(null);
 
 export const AppDataProvider = ({ children }: PropsWithChildren) => {
@@ -61,6 +114,15 @@ export const AppDataProvider = ({ children }: PropsWithChildren) => {
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot>(emptySnapshot);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedFacilityId, setSelectedFacilityId] = useState<WarehouseFacilityId>(defaultWarehouseFacilityId);
+  const [selectedShift, setSelectedShift] = useState<WarehouseShift>(defaultWarehouseFacility.overview.shift);
+  const [commandFeedByFacility, setCommandFeedByFacility] =
+    useState<Record<WarehouseFacilityId, WarehouseRecommendation[]>>(cloneFacilityFeed);
+  const [timelineByFacility, setTimelineByFacility] =
+    useState<Record<WarehouseFacilityId, TimelineEvent[]>>(cloneFacilityTimeline);
+  const [chatByFacility, setChatByFacility] =
+    useState<Record<WarehouseFacilityId, ChatMessage[]>>(buildFacilityChats);
+  const [chatLoading, setChatLoading] = useState(false);
 
   const refresh = async () => {
     if (!currentUser) {
@@ -85,6 +147,15 @@ export const AppDataProvider = ({ children }: PropsWithChildren) => {
   useEffect(() => {
     void refresh();
   }, [currentUser, mode]);
+
+  useEffect(() => {
+    setSelectedShift(getWarehouseFacility(selectedFacilityId).overview.shift);
+  }, [selectedFacilityId]);
+
+  const selectedWarehouse = useMemo(
+    () => getWarehouseFacility(selectedFacilityId),
+    [selectedFacilityId],
+  );
 
   const upsertAgent = async (
     agent: Omit<Agent, 'id' | 'organizationId' | 'ownerId' | 'createdAt' | 'updatedAt'> & { id?: string },
@@ -190,6 +261,103 @@ export const AppDataProvider = ({ children }: PropsWithChildren) => {
     }));
   };
 
+  const pushTimelineEvent = (facilityId: WarehouseFacilityId, event: TimelineEvent) => {
+    setTimelineByFacility((previous) => ({
+      ...previous,
+      [facilityId]: [event, ...previous[facilityId]],
+    }));
+  };
+
+  const updateRecommendationStatus = (recommendationId: string, status: CommandStatus) => {
+    const facilityId = selectedFacilityId;
+    let changedTitle = '';
+    setCommandFeedByFacility((previous) => ({
+      ...previous,
+      [facilityId]: previous[facilityId].map((item) => {
+        if (item.id !== recommendationId) {
+          return item;
+        }
+        changedTitle = item.title;
+        return { ...item, status };
+      }),
+    }));
+
+    if (changedTitle) {
+      pushTimelineEvent(facilityId, {
+        id: `timeline-${recommendationId}-${status.toLowerCase()}`,
+        time: 'Now',
+        department: 'Supervisor Action',
+        severity: status === 'Escalated' ? 'Critical' : status === 'Accepted' ? 'High' : 'Low',
+        description: `${changedTitle} was marked ${status.toLowerCase()} by the supervisor.`,
+      });
+    }
+  };
+
+  const createTaskFromRecommendation = (recommendationId: string) => {
+    const facilityId = selectedFacilityId;
+    const item = commandFeedByFacility[facilityId].find((recommendation) => recommendation.id === recommendationId);
+    if (!item) {
+      return null;
+    }
+
+    setCommandFeedByFacility((previous) => ({
+      ...previous,
+      [facilityId]: previous[facilityId].map((recommendation) =>
+        recommendation.id === recommendationId ? { ...recommendation, status: 'Accepted' } : recommendation,
+      ),
+    }));
+
+    pushTimelineEvent(facilityId, {
+      id: `task-${recommendationId}`,
+      time: 'Now',
+      department: 'Task Queue',
+      severity: item.priority === 'Critical' ? 'Critical' : 'Medium',
+      description: `Task created from AI action: ${item.recommendation}`,
+    });
+
+    return `Task created for ${item.department.toLowerCase()}: ${item.title}.`;
+  };
+
+  const askNexus = async (prompt: string) => {
+    const facilityId = selectedFacilityId;
+    const facility = getWarehouseFacility(facilityId);
+    const normalizedPrompt = prompt.trim();
+    if (!normalizedPrompt) {
+      return;
+    }
+
+    setChatByFacility((previous) => ({
+      ...previous,
+      [facilityId]: [
+        ...previous[facilityId],
+        { id: `user-${Date.now()}`, role: 'user', message: normalizedPrompt },
+      ],
+    }));
+    setChatLoading(true);
+
+    const preset =
+      facility.chatPresets.find((item) => item.prompt.toLowerCase() === normalizedPrompt.toLowerCase()) ??
+      facility.chatPresets.find((item) => normalizedPrompt.toLowerCase().includes(item.prompt.toLowerCase().split(' ')[0])) ??
+      null;
+
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 420);
+    });
+
+    const response =
+      preset?.response ??
+      `${facility.label} is currently tracking ${facility.commandFeed.length} live AI actions. The fastest supervisor win is to address the highest-priority recommendation and clear the active dock-to-stock risk first.`;
+
+    setChatByFacility((previous) => ({
+      ...previous,
+      [facilityId]: [
+        ...previous[facilityId],
+        { id: `assistant-${Date.now()}`, role: 'assistant', message: response },
+      ],
+    }));
+    setChatLoading(false);
+  };
+
   return (
     <AppDataContext.Provider
       value={{
@@ -203,6 +371,20 @@ export const AppDataProvider = ({ children }: PropsWithChildren) => {
         updateOrganization,
         runTask,
         dashboardStats: calculateDashboardStats(snapshot),
+        facilityOptions: warehouseFacilityOptions,
+        shiftOptions: warehouseShiftOptions,
+        selectedFacilityId,
+        setSelectedFacilityId,
+        selectedShift,
+        setSelectedShift,
+        selectedWarehouse,
+        commandFeed: commandFeedByFacility[selectedFacilityId],
+        timeline: [...timelineByFacility[selectedFacilityId], ...selectedWarehouse.timeline],
+        chatMessages: chatByFacility[selectedFacilityId],
+        chatLoading,
+        updateRecommendationStatus,
+        createTaskFromRecommendation,
+        askNexus,
       }}
     >
       {children}
