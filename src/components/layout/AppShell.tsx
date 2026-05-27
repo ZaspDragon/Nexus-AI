@@ -42,6 +42,10 @@ export const AppShell = ({ children }: PropsWithChildren) => {
     setSelectedShift,
     selectedWarehouse,
     commandFeed,
+    liveOpsConfigured,
+    liveOpsMode,
+    liveConnectionStatus,
+    lastLiveUpdate,
   } = useAppData();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -133,10 +137,30 @@ export const AppShell = ({ children }: PropsWithChildren) => {
                 <Badge tone={activeCriticalCount > 0 ? 'warning' : 'success'}>
                   {activeCriticalCount} live actions
                 </Badge>
+                <Badge
+                  tone={
+                    liveOpsMode === 'live' && liveConnectionStatus === 'connected'
+                      ? 'success'
+                      : liveOpsConfigured
+                        ? 'warning'
+                        : 'default'
+                  }
+                >
+                  {liveOpsMode === 'live' && liveConnectionStatus === 'connected'
+                    ? 'Live ops connected'
+                    : liveOpsConfigured
+                      ? `Live ops ${liveConnectionStatus}`
+                      : 'Demo signals'}
+                </Badge>
               </div>
               <p className="mt-4 text-xs leading-5 text-slate-400">
                 {selectedWarehouse.overview.supervisors.join(' and ')} are supervising this facility.
               </p>
+              {lastLiveUpdate ? (
+                <p className="mt-2 text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                  Last live update {new Date(lastLiveUpdate).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -200,6 +224,21 @@ export const AppShell = ({ children }: PropsWithChildren) => {
                 <Badge tone="default">{selectedShift}</Badge>
                 <Badge tone={selectedWarehouse.shiftHealth.score >= 80 ? 'success' : 'warning'}>
                   Shift health {selectedWarehouse.shiftHealth.score}/100
+                </Badge>
+                <Badge
+                  tone={
+                    liveOpsMode === 'live' && liveConnectionStatus === 'connected'
+                      ? 'success'
+                      : liveOpsConfigured
+                        ? 'warning'
+                        : 'default'
+                  }
+                >
+                  {liveOpsMode === 'live' && liveConnectionStatus === 'connected'
+                    ? 'Live warehouse signals'
+                    : liveOpsConfigured
+                      ? `Signal ${liveConnectionStatus}`
+                      : 'Demo mode'}
                 </Badge>
                 <Badge tone={activeCriticalCount > 0 ? 'warning' : 'success'}>
                   <Waypoints className="mr-1 h-3 w-3" />

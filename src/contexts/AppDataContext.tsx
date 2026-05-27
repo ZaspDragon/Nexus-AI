@@ -1,6 +1,5 @@
 import { createContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 import { calculateDashboardStats } from '../services/analytics';
-import { runMockOrchestration } from '../services/mockOrchestrator';
 import {
   defaultWarehouseFacility,
   defaultWarehouseFacilityId,
@@ -20,17 +19,28 @@ import {
   saveUsageLog,
 } from '../services/repository';
 import { useAuth } from '../hooks/useAuth';
+import { runMockOrchestration } from '../services/mockOrchestrator';
+import {
+  fetchLiveFacilityState,
+  isLiveOpsConfigured,
+  simulateLiveScenario as simulateLiveScenarioRequest,
+  subscribeToLiveFacility,
+} from '../services/liveOps';
 import type {
   Agent,
   ChatMessage,
   CommandStatus,
+  LiveConnectionStatus,
+  LiveConnectorStatus,
+  LiveFacilitySnapshot,
+  LiveOpsMode,
+  LiveSimulationScenario,
   MemoryNote,
   Organization,
   TimelineEvent,
   ToolDefinition,
   WarehouseFacilityData,
   WarehouseFacilityId,
-  WarehouseRecommendation,
   WarehouseShift,
   WorkspaceSnapshot,
 } from '../types';
@@ -56,13 +66,19 @@ interface AppDataContextValue extends WorkspaceSnapshot {
   selectedShift: WarehouseShift;
   setSelectedShift: (shift: WarehouseShift) => void;
   selectedWarehouse: WarehouseFacilityData;
-  commandFeed: WarehouseRecommendation[];
-  timeline: TimelineEvent[];
+  commandFeed: WarehouseFacilityData['commandFeed'];
+  timeline: WarehouseFacilityData['timeline'];
   chatMessages: ChatMessage[];
   chatLoading: boolean;
   updateRecommendationStatus: (recommendationId: string, status: CommandStatus) => void;
   createTaskFromRecommendation: (recommendationId: string) => string | null;
   askNexus: (prompt: string) => Promise<void>;
+  liveOpsConfigured: boolean;
+  liveOpsMode: LiveOpsMode;
+  liveConnectionStatus: LiveConnectionStatus;
+  liveConnectors: LiveConnectorStatus[];
+  lastLiveUpdate: string | null;
+  runLiveSimulation: (scenario?: LiveSimulationScenario) => Promise<string | null>;
 }
 
 const emptySnapshot: WorkspaceSnapshot = {
@@ -83,18 +99,10 @@ const emptySnapshot: WorkspaceSnapshot = {
   usageLogs: [],
 };
 
-const cloneFacilityFeed = () =>
+const cloneWarehouseState = () =>
   Object.fromEntries(
-    Object.entries(warehouseFacilities).map(([facilityId, facility]) => [
-      facilityId,
-      facility.commandFeed.map((item) => ({ ...item })),
-    ]),
-  ) as Record<WarehouseFacilityId, WarehouseRecommendation[]>;
-
-const cloneFacilityTimeline = () =>
-  Object.fromEntries(
-    Object.keys(warehouseFacilities).map((facilityId) => [facilityId, []]),
-  ) as unknown as Record<WarehouseFacilityId, TimelineEvent[]>;
+    Object.entries(warehouseFacilities).map(([facilityId, facility]) => [facilityId, structuredClone(facility)]),
+  ) as Record<WarehouseFacilityId, WarehouseFacilityData>;
 
 const buildIntroMessage = (facility: WarehouseFacilityData): ChatMessage => ({
   id: `intro-${facility.id}`,
@@ -107,6 +115,11 @@ const buildFacilityChats = () =>
     Object.values(warehouseFacilities).map((facility) => [facility.id, [buildIntroMessage(facility)]]),
   ) as Record<WarehouseFacilityId, ChatMessage[]>;
 
+const buildConnectionState = <T,>(value: T) =>
+  Object.fromEntries(
+    warehouseFacilityOptions.map((facility) => [facility.id, value]),
+  ) as Record<WarehouseFacilityId, T>;
+
 export const AppDataContext = createContext<AppDataContextValue | null>(null);
 
 export const AppDataProvider = ({ children }: PropsWithChildren) => {
@@ -116,13 +129,19 @@ export const AppDataProvider = ({ children }: PropsWithChildren) => {
   const [error, setError] = useState<string | null>(null);
   const [selectedFacilityId, setSelectedFacilityId] = useState<WarehouseFacilityId>(defaultWarehouseFacilityId);
   const [selectedShift, setSelectedShift] = useState<WarehouseShift>(defaultWarehouseFacility.overview.shift);
-  const [commandFeedByFacility, setCommandFeedByFacility] =
-    useState<Record<WarehouseFacilityId, WarehouseRecommendation[]>>(cloneFacilityFeed);
-  const [timelineByFacility, setTimelineByFacility] =
-    useState<Record<WarehouseFacilityId, TimelineEvent[]>>(cloneFacilityTimeline);
+  const [warehouseByFacility, setWarehouseByFacility] =
+    useState<Record<WarehouseFacilityId, WarehouseFacilityData>>(cloneWarehouseState);
   const [chatByFacility, setChatByFacility] =
     useState<Record<WarehouseFacilityId, ChatMessage[]>>(buildFacilityChats);
   const [chatLoading, setChatLoading] = useState(false);
+  const [liveModeByFacility, setLiveModeByFacility] =
+    useState<Record<WarehouseFacilityId, LiveOpsMode>>(buildConnectionState('demo'));
+  const [liveStatusByFacility, setLiveStatusByFacility] =
+    useState<Record<WarehouseFacilityId, LiveConnectionStatus>>(buildConnectionState('disconnected'));
+  const [connectorsByFacility, setConnectorsByFacility] =
+    useState<Record<WarehouseFacilityId, LiveConnectorStatus[]>>(buildConnectionState([] as LiveConnectorStatus[]));
+  const [lastLiveUpdateByFacility, setLastLiveUpdateByFacility] =
+    useState<Record<WarehouseFacilityId, string | null>>(buildConnectionState(null as string | null));
 
   const refresh = async () => {
     if (!currentUser) {
@@ -152,9 +171,88 @@ export const AppDataProvider = ({ children }: PropsWithChildren) => {
     setSelectedShift(getWarehouseFacility(selectedFacilityId).overview.shift);
   }, [selectedFacilityId]);
 
+  const applyLiveSnapshot = (facilityId: WarehouseFacilityId, snapshotPayload: LiveFacilitySnapshot) => {
+    setWarehouseByFacility((previous) => ({
+      ...previous,
+      [facilityId]: snapshotPayload.facility,
+    }));
+    setConnectorsByFacility((previous) => ({
+      ...previous,
+      [facilityId]: snapshotPayload.connectors,
+    }));
+    setLastLiveUpdateByFacility((previous) => ({
+      ...previous,
+      [facilityId]: snapshotPayload.lastUpdated,
+    }));
+    setLiveModeByFacility((previous) => ({
+      ...previous,
+      [facilityId]: 'live',
+    }));
+  };
+
+  useEffect(() => {
+    if (!isLiveOpsConfigured) {
+      setLiveStatusByFacility((previous) => ({
+        ...previous,
+        [selectedFacilityId]: 'disconnected',
+      }));
+      return;
+    }
+
+    let active = true;
+    setLiveStatusByFacility((previous) => ({
+      ...previous,
+      [selectedFacilityId]: 'connecting',
+    }));
+
+    void fetchLiveFacilityState(selectedFacilityId)
+      .then((snapshotPayload) => {
+        if (!active) {
+          return;
+        }
+        applyLiveSnapshot(selectedFacilityId, snapshotPayload);
+        setLiveStatusByFacility((previous) => ({
+          ...previous,
+          [selectedFacilityId]: 'connected',
+        }));
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+        setLiveStatusByFacility((previous) => ({
+          ...previous,
+          [selectedFacilityId]: 'fallback',
+        }));
+      });
+
+    const unsubscribe = subscribeToLiveFacility(selectedFacilityId, {
+      onSnapshot: (snapshotPayload) => {
+        if (!active) {
+          return;
+        }
+        applyLiveSnapshot(selectedFacilityId, snapshotPayload);
+      },
+      onStatusChange: (status) => {
+        if (!active) {
+          return;
+        }
+        setLiveStatusByFacility((previous) => ({
+          ...previous,
+          [selectedFacilityId]: status,
+        }));
+      },
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [selectedFacilityId]);
+
   const selectedWarehouse = useMemo(
-    () => getWarehouseFacility(selectedFacilityId),
-    [selectedFacilityId],
+    () => warehouseByFacility[selectedFacilityId] ?? getWarehouseFacility(selectedFacilityId),
+    [selectedFacilityId, warehouseByFacility],
   );
 
   const upsertAgent = async (
@@ -262,24 +360,30 @@ export const AppDataProvider = ({ children }: PropsWithChildren) => {
   };
 
   const pushTimelineEvent = (facilityId: WarehouseFacilityId, event: TimelineEvent) => {
-    setTimelineByFacility((previous) => ({
+    setWarehouseByFacility((previous) => ({
       ...previous,
-      [facilityId]: [event, ...previous[facilityId]],
+      [facilityId]: {
+        ...previous[facilityId],
+        timeline: [event, ...previous[facilityId].timeline].slice(0, 12),
+      },
     }));
   };
 
   const updateRecommendationStatus = (recommendationId: string, status: CommandStatus) => {
     const facilityId = selectedFacilityId;
     let changedTitle = '';
-    setCommandFeedByFacility((previous) => ({
+    setWarehouseByFacility((previous) => ({
       ...previous,
-      [facilityId]: previous[facilityId].map((item) => {
-        if (item.id !== recommendationId) {
-          return item;
-        }
-        changedTitle = item.title;
-        return { ...item, status };
-      }),
+      [facilityId]: {
+        ...previous[facilityId],
+        commandFeed: previous[facilityId].commandFeed.map((item) => {
+          if (item.id !== recommendationId) {
+            return item;
+          }
+          changedTitle = item.title;
+          return { ...item, status };
+        }),
+      },
     }));
 
     if (changedTitle) {
@@ -295,16 +399,19 @@ export const AppDataProvider = ({ children }: PropsWithChildren) => {
 
   const createTaskFromRecommendation = (recommendationId: string) => {
     const facilityId = selectedFacilityId;
-    const item = commandFeedByFacility[facilityId].find((recommendation) => recommendation.id === recommendationId);
+    const item = selectedWarehouse.commandFeed.find((recommendation) => recommendation.id === recommendationId);
     if (!item) {
       return null;
     }
 
-    setCommandFeedByFacility((previous) => ({
+    setWarehouseByFacility((previous) => ({
       ...previous,
-      [facilityId]: previous[facilityId].map((recommendation) =>
-        recommendation.id === recommendationId ? { ...recommendation, status: 'Accepted' } : recommendation,
-      ),
+      [facilityId]: {
+        ...previous[facilityId],
+        commandFeed: previous[facilityId].commandFeed.map((recommendation) =>
+          recommendation.id === recommendationId ? { ...recommendation, status: 'Accepted' } : recommendation,
+        ),
+      },
     }));
 
     pushTimelineEvent(facilityId, {
@@ -320,7 +427,6 @@ export const AppDataProvider = ({ children }: PropsWithChildren) => {
 
   const askNexus = async (prompt: string) => {
     const facilityId = selectedFacilityId;
-    const facility = getWarehouseFacility(facilityId);
     const normalizedPrompt = prompt.trim();
     if (!normalizedPrompt) {
       return;
@@ -336,8 +442,10 @@ export const AppDataProvider = ({ children }: PropsWithChildren) => {
     setChatLoading(true);
 
     const preset =
-      facility.chatPresets.find((item) => item.prompt.toLowerCase() === normalizedPrompt.toLowerCase()) ??
-      facility.chatPresets.find((item) => normalizedPrompt.toLowerCase().includes(item.prompt.toLowerCase().split(' ')[0])) ??
+      selectedWarehouse.chatPresets.find((item) => item.prompt.toLowerCase() === normalizedPrompt.toLowerCase()) ??
+      selectedWarehouse.chatPresets.find((item) =>
+        normalizedPrompt.toLowerCase().includes(item.prompt.toLowerCase().split(' ')[0]),
+      ) ??
       null;
 
     await new Promise((resolve) => {
@@ -346,7 +454,7 @@ export const AppDataProvider = ({ children }: PropsWithChildren) => {
 
     const response =
       preset?.response ??
-      `${facility.label} is currently tracking ${facility.commandFeed.length} live AI actions. The fastest supervisor win is to address the highest-priority recommendation and clear the active dock-to-stock risk first.`;
+      `${selectedWarehouse.label} is currently tracking ${selectedWarehouse.commandFeed.length} live AI actions. The fastest supervisor win is to address the highest-priority recommendation and clear the top dock-to-stock risk first.`;
 
     setChatByFacility((previous) => ({
       ...previous,
@@ -356,6 +464,24 @@ export const AppDataProvider = ({ children }: PropsWithChildren) => {
       ],
     }));
     setChatLoading(false);
+  };
+
+  const runLiveSimulation = async (scenario: LiveSimulationScenario = 'mixed') => {
+    if (!isLiveOpsConfigured) {
+      return 'Configure VITE_NEXUS_LIVE_OPS_URL to test live ingestion.';
+    }
+
+    try {
+      const snapshotPayload = await simulateLiveScenarioRequest(selectedFacilityId, scenario);
+      applyLiveSnapshot(selectedFacilityId, snapshotPayload);
+      setLiveStatusByFacility((previous) => ({
+        ...previous,
+        [selectedFacilityId]: 'connected',
+      }));
+      return `Live ${scenario} scenario injected for ${selectedWarehouse.label}.`;
+    } catch (simulationError) {
+      return simulationError instanceof Error ? simulationError.message : 'Unable to run live simulation.';
+    }
   };
 
   return (
@@ -378,13 +504,19 @@ export const AppDataProvider = ({ children }: PropsWithChildren) => {
         selectedShift,
         setSelectedShift,
         selectedWarehouse,
-        commandFeed: commandFeedByFacility[selectedFacilityId],
-        timeline: [...timelineByFacility[selectedFacilityId], ...selectedWarehouse.timeline],
+        commandFeed: selectedWarehouse.commandFeed,
+        timeline: selectedWarehouse.timeline,
         chatMessages: chatByFacility[selectedFacilityId],
         chatLoading,
         updateRecommendationStatus,
         createTaskFromRecommendation,
         askNexus,
+        liveOpsConfigured: isLiveOpsConfigured,
+        liveOpsMode: liveModeByFacility[selectedFacilityId],
+        liveConnectionStatus: liveStatusByFacility[selectedFacilityId],
+        liveConnectors: connectorsByFacility[selectedFacilityId],
+        lastLiveUpdate: lastLiveUpdateByFacility[selectedFacilityId],
+        runLiveSimulation,
       }}
     >
       {children}

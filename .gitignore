@@ -11,7 +11,10 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+server-dist
 *.local
+vite-stdout.log
+vite-stderr.log
 
 # Environment and secrets
 .env

@@ -336,3 +336,50 @@ export interface WarehouseFacilityData {
   reportHighlights: string[];
   chatPresets: ChatPreset[];
 }
+
+export type LiveOpsMode = 'demo' | 'live';
+
+export type LiveConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'fallback';
+
+export type OperationalEventSource = 'wms' | 'lms' | 'yms' | 'telemetry' | 'erp' | 'manual';
+
+export type OperationalEventType =
+  | 'truck_arrival'
+  | 'receiving_progress'
+  | 'dock_delay'
+  | 'labor_update'
+  | 'downtime_alert'
+  | 'inventory_signal'
+  | 'picking_rate'
+  | 'worker_assignment';
+
+export type LiveSimulationScenario =
+  | 'mixed'
+  | 'receiving-delay'
+  | 'downtime-spike'
+  | 'inventory-variance'
+  | 'labor-rebalance';
+
+export interface LiveConnectorStatus {
+  id: string;
+  label: string;
+  source: OperationalEventSource;
+  status: 'connected' | 'degraded' | 'pending';
+  lastEventAt: string;
+  detail: string;
+}
+
+export interface LiveOpsEvent {
+  facilityId: WarehouseFacilityId;
+  source: OperationalEventSource;
+  type: OperationalEventType;
+  occurredAt: string;
+  payload: Record<string, unknown>;
+}
+
+export interface LiveFacilitySnapshot {
+  mode: 'live';
+  facility: WarehouseFacilityData;
+  connectors: LiveConnectorStatus[];
+  lastUpdated: string;
+}

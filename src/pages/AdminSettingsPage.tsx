@@ -5,7 +5,16 @@ import { useAppData } from '../hooks/useAppData';
 import type { SubscriptionTier } from '../types';
 
 export const AdminSettingsPage = () => {
-  const { organization, updateOrganization } = useAppData();
+  const {
+    organization,
+    updateOrganization,
+    liveOpsConfigured,
+    liveOpsMode,
+    liveConnectionStatus,
+    liveConnectors,
+    lastLiveUpdate,
+    runLiveSimulation,
+  } = useAppData();
   const [name, setName] = useState(organization.name);
   const [teamMembers, setTeamMembers] = useState(organization.teamMembers.join('\n'));
   const [usageLimit, setUsageLimit] = useState(String(organization.usageLimit));
@@ -37,6 +46,13 @@ export const AdminSettingsPage = () => {
     }
   };
 
+  const handleSimulation = async (scenario: Parameters<typeof runLiveSimulation>[0]) => {
+    const result = await runLiveSimulation(scenario);
+    if (result) {
+      setStatus(result);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -44,6 +60,50 @@ export const AdminSettingsPage = () => {
         title="Operational settings"
         description="Manage company details, subscription posture, and environment placeholders without exposing provider secrets in the browser."
       />
+
+      <div className="grid gap-4 xl:grid-cols-3">
+        <SurfaceCard>
+          <p className="text-xs uppercase tracking-[0.28em] text-cyan-300/80">Live Ops API</p>
+          <h2 className="mt-3 text-2xl font-semibold text-white">
+            {liveOpsConfigured ? 'Configured' : 'Not configured'}
+          </h2>
+          <p className="mt-3 text-sm text-slate-300">
+            {liveOpsConfigured
+              ? `Current signal state: ${liveConnectionStatus}. Nexus is ready to ingest live WMS, LMS, YMS, telemetry, and ERP events.`
+              : 'Add VITE_NEXUS_LIVE_OPS_URL to connect the app to the live operations backend.'}
+          </p>
+        </SurfaceCard>
+
+        <SurfaceCard>
+          <p className="text-xs uppercase tracking-[0.28em] text-cyan-300/80">Mode</p>
+          <h2 className="mt-3 text-2xl font-semibold text-white">
+            {liveOpsMode === 'live' ? 'Live Warehouse Signals' : 'Demo Signal Layer'}
+          </h2>
+          <p className="mt-3 text-sm text-slate-300">
+            {lastLiveUpdate
+              ? `Last live update received at ${new Date(lastLiveUpdate).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}.`
+              : 'No live signal has been received for this facility in the current session.'}
+          </p>
+        </SurfaceCard>
+
+        <SurfaceCard>
+          <p className="text-xs uppercase tracking-[0.28em] text-cyan-300/80">Simulation</p>
+          <h2 className="mt-3 text-2xl font-semibold text-white">Test the pipeline</h2>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {(['mixed', 'receiving-delay', 'downtime-spike'] as const).map((scenario) => (
+              <button
+                key={scenario}
+                type="button"
+                className="ghost-button px-4 py-2 text-xs"
+                disabled={!liveOpsConfigured}
+                onClick={() => void handleSimulation(scenario)}
+              >
+                {scenario}
+              </button>
+            ))}
+          </div>
+        </SurfaceCard>
+      </div>
 
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <SurfaceCard>
@@ -103,6 +163,31 @@ export const AdminSettingsPage = () => {
                 />
               </div>
             ))}
+          </div>
+
+          <div className="mt-6 rounded-3xl border border-cyan-400/15 bg-cyan-400/8 p-5">
+            <h3 className="text-lg font-semibold text-white">Live connector status</h3>
+            <div className="mt-4 space-y-3">
+              {liveConnectors.length ? (
+                liveConnectors.map((connector) => (
+                  <div key={connector.id} className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm text-white">{connector.label}</p>
+                        <p className="mt-1 text-xs text-slate-400">{connector.detail}</p>
+                      </div>
+                      <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-slate-200">
+                        {connector.status}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-slate-300">
+                  Connector telemetry will appear here once the live backend is configured and starts receiving events.
+                </p>
+              )}
+            </div>
           </div>
         </SurfaceCard>
       </div>
